@@ -139,24 +139,29 @@ function hist { python "D:\powershell-history-navigator\history_tui.py" }
 
 ---
 
-## ⌨️ Keyboard Shortcuts
+## ⌨️ Keyboard Shortcuts & Command Mode
 
-| Key | Action | Description |
-|:---|:---|:---|
-| `↑` / `↓` | **Navigate** | Move through commands (works directly from the search bar too!) |
-| `←` / `→` | **Jump Page** | Jump 10 items backward / forward |
-| `/` | **Focus Search** | Jump straight into the live search input box |
-| `Esc` | **Clear / Unfocus** | Clear search input or return focus to the history table |
-| `:red:` | **Dud Filter** | Type `:red:` in search to filter **only** bad syntax / error commands |
-| `Enter` | **Copy & Exit** | Copy selected command to Windows clipboard and exit TUI |
-| `C` | **Copy Only** | Copy selected command to clipboard without closing TUI |
-| `Delete` / `D` | **Delete Single** | Permanently delete the selected command from history on disk |
-| `X` / `Shift+Del` | **Bulk Delete** | Permanently delete **all currently filtered** commands (requires 2 confirmations) |
-| `E` / `O` | **Open in Editor** | Open `ConsoleHost_history.txt` directly in Sublime Text / Default Editor |
-| `T` | **Toggle Theme** | Switch color palette between **Monokai** and **Dracula** |
-| `R` | **Reload** | Re-read history file from disk to sync new commands |
-| `?` / `H` / `F1` | **Help Overlay** | Open on-screen keybinding cheat-sheet |
-| `Q` | **Quit** | Close the application |
+Press **`:`** anytime to enter **Command Mode** at the bottom bar (like Vim), or use single-key shortcuts:
+
+| Key | Colon Command | Action | Description |
+|:---|:---|:---|:---|
+| `↑` / `↓` | — | **Navigate** | Move through commands (works directly from search bar too) |
+| `←` / `→` | — | **Jump Page** | Jump 10 items backward / forward |
+| `:` | — | **Command Mode** | Focus bottom bar and insert `:` |
+| `/` | — | **Focus Search** | Focus live search input box |
+| `Esc` | — | **Clear / Unfocus** | Clear search input or return focus to history table |
+| — | `:red` / `:duds` | **Dud Filter** | Filter and isolate **only** bad syntax / error commands |
+| `Enter` | `:copy` / `:c` | **Copy & Exit** | Copy selected command to clipboard and exit TUI |
+| `C` | — | **Copy Only** | Copy selected command without closing TUI |
+| `M` / `I` | `:edit` / `:mod` | **In-Place Edit** | Open interactive editor to modify command in-place |
+| `Delete` / `D` | `:del` / `:delete` | **Delete Single** | Permanently delete selected command from history |
+| `X` / `Shift+Del` | `:purge` / `:clean` | **Bulk Delete** | Delete **all filtered commands** (requires 2 confirmations) |
+| `S` | `:sort` / `:invert` | **Toggle Sort** | Flip sorting order (Newest First ⇄ Oldest First) |
+| `T` | `:theme` | **Toggle Theme** | Cycle themes (**Monokai** ⇄ **Dracula** ⇄ **Tokyo Night**) |
+| `E` / `O` | `:subl` / `:open` | **Open in Editor** | Open `ConsoleHost_history.txt` in Sublime Text / Editor |
+| `R` | `:reload` / `:sync`| **Reload** | Re-read history file from disk to sync new commands |
+| `?` / `H` / `F1` | `:help` / `:keys` | **Help Overlay** | Open on-screen keybinding cheat-sheet |
+| `Q` | `:q` / `:quit` | **Quit** | Close the application |
 
 ---
 

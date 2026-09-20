@@ -12,7 +12,7 @@ from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.containers import Vertical, Horizontal
 from textual.screen import ModalScreen
-from textual.widgets import Header, Footer, Input, DataTable, Static, Button
+from textual.widgets import Input, DataTable, Static, Button, TextArea
 from textual.binding import Binding
 from textual.reactive import reactive
 
@@ -96,6 +96,96 @@ class SearchInput(Input):
         Binding("escape", "app.clear_or_blur", "Cancel", show=False),
     ]
 
+class EditCommandModal(ModalScreen[Optional[str]]):
+    """In-place command editing modal."""
+    CSS = """
+    EditCommandModal {
+        align: center middle;
+        background: rgba(0, 0, 0, 0.85);
+    }
+
+    #edit_dialog {
+        width: 82;
+        height: auto;
+        max-height: 85%;
+        border: thick $accent;
+        background: $surface;
+        padding: 1 2;
+    }
+
+    #edit_title {
+        text-style: bold;
+        color: $accent;
+        margin-bottom: 1;
+        text-align: center;
+    }
+
+    #edit_input {
+        width: 100%;
+        height: auto;
+        min-height: 3;
+        max-height: 8;
+        border: round $primary;
+        margin-bottom: 1;
+        background: $panel;
+        color: $text;
+    }
+
+    #edit_buttons {
+        align: center middle;
+        height: auto;
+        margin-top: 1;
+    }
+
+    #edit_buttons Button {
+        margin: 0 1;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel_edit", "Cancel", show=False),
+        Binding("ctrl+s", "save_edit", "Save", show=False),
+    ]
+
+    def __init__(self, index: int, command: str):
+        super().__init__()
+        self.command_index = index
+        self.original_command = command
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="edit_dialog"):
+            yield Static(f"✏️ In-Place Edit Command #{self.command_index}", id="edit_title")
+            yield Input(value=self.original_command, id="edit_input")
+            with Horizontal(id="edit_buttons"):
+                yield Button("Save to Disk (Enter)", id="btn_save", variant="success")
+                yield Button("Copy & Exit (Ctrl+C)", id="btn_copy", variant="primary")
+                yield Button("Cancel (Esc)", id="btn_cancel", variant="default")
+
+    def on_mount(self) -> None:
+        inp = self.query_one("#edit_input", Input)
+        inp.focus()
+        inp.cursor_position = len(inp.value)
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        self.dismiss(event.value)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        inp = self.query_one("#edit_input", Input)
+        if event.button.id == "btn_save":
+            self.dismiss(inp.value)
+        elif event.button.id == "btn_copy":
+            copy_to_clipboard(inp.value)
+            self.app.exit(result=inp.value)
+        else:
+            self.dismiss(None)
+
+    def action_save_edit(self) -> None:
+        inp = self.query_one("#edit_input", Input)
+        self.dismiss(inp.value)
+
+    def action_cancel_edit(self) -> None:
+        self.dismiss(None)
+
 class ConfirmModal(ModalScreen[bool]):
     """Generic double-confirmation modal with customizable warning theme."""
     CSS = """
@@ -174,17 +264,17 @@ class ConfirmModal(ModalScreen[bool]):
         self.dismiss(True)
 
 class HelpModal(ModalScreen):
-    """Modal popup screen showing all shortcuts and commands."""
+    """Modal popup screen showing all shortcuts and colon commands."""
     CSS = """
     HelpModal {
         align: center middle;
-        background: rgba(0, 0, 0, 0.75);
+        background: rgba(0, 0, 0, 0.8);
     }
 
     #help_container {
-        width: 76;
+        width: 80;
         height: auto;
-        max-height: 90%;
+        max-height: 92%;
         border: thick $accent;
         background: $surface;
         padding: 1 2;
@@ -218,35 +308,38 @@ class HelpModal(ModalScreen):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="help_container"):
-            yield Static("⚡ PowerShell History Navigator - Keyboard Shortcuts", id="help_title")
+            yield Static("⚡ PowerShell History Navigator - Shortcuts & Commands", id="help_title")
             help_content = (
-                "[bold cyan]Navigation & Selection[/]\n"
-                "  [yellow]↑ / ↓[/]            Navigate commands (works from search bar too!)\n"
+                "[bold cyan]Navigation & Command Mode[/]\n"
+                "  [yellow]↑ / ↓[/]            Navigate history rows (works from search bar)\n"
                 "  [yellow]← / →[/]            Jump 10 items backward / forward\n"
+                "  [yellow]:[/]                [bold green]Enter Command Mode[/] (focuses bar with ':')\n"
                 "  [yellow]/[/]                Focus live search bar\n"
                 "  [yellow]Esc[/]              Clear search / Return to table\n\n"
-                "[bold cyan]Search Filters[/]\n"
-                "  [bold red]:red:[/], [bold red]:red[/], [bold red]:err[/]     Filter [bold red]ONLY bad syntax / dud commands[/]\n\n"
-                "[bold cyan]Actions[/]\n"
-                "  [yellow]Enter[/]            Copy selected command to clipboard & exit\n"
-                "  [yellow]C[/]                Copy selected command without exiting\n"
-                "  [yellow]Delete / D[/]       Permanently delete selected command from history\n"
-                "  [bold red]X / Shift+Del[/]      [bold red]Delete ALL filtered commands[/] (Requires filter + 2 confirmations)\n"
-                "  [yellow]E / O[/]            Open history file in Sublime Text / Default Editor\n"
-                "  [yellow]T[/]                Toggle Theme Palette ([bold magenta]Monokai[/] ⇄ [bold purple]Dracula[/])\n"
-                "  [yellow]R[/]                Reload history from disk\n"
-                "  [yellow]? / H / F1[/]       Show this help cheat-sheet\n"
-                "  [yellow]Q[/]                Quit\n"
+                "[bold cyan]Actions & Colon Command Counterparts[/]\n"
+                "  [yellow]Enter[/]            Copy & Exit                     [dim](:copy / :c)[/]\n"
+                "  [yellow]M / I[/]            [bold green]In-Place Edit Command[/]           [dim](:edit / :mod)[/]\n"
+                "  [yellow]Delete / D[/]       Delete selected command         [dim](:del / :delete)[/]\n"
+                "  [bold red]X / Shift+Del[/]      [bold red]Delete ALL filtered commands[/]    [dim](:purge / :clean)[/]\n"
+                "  [yellow]S[/]                Toggle Sort (Newest ⇄ Oldest)   [dim](:sort / :invert)[/]\n"
+                "  [yellow]T[/]                Toggle Theme (Monokai/Dracula)  [dim](:theme / :tokyo)[/]\n"
+                "  [yellow]E / O[/]            Open in Sublime Text / Editor   [dim](:subl / :open)[/]\n"
+                "  [yellow]R[/]                Reload history from disk        [dim](:reload / :sync)[/]\n"
+                "  [yellow]? / H / F1[/]       Show this cheat-sheet           [dim](:help / :keys)[/]\n"
+                "  [yellow]Q[/]                Quit                            [dim](:q / :quit)[/]\n\n"
+                "[bold cyan]Special Filters[/]\n"
+                "  [bold red]:red[/], [bold red]:duds[/]        Filter [bold red]ONLY bad syntax & error commands[/]\n"
             )
             yield Static(help_content, id="help_body")
             yield Static("Press [bold yellow]Esc[/], [bold yellow]?[/], or [bold yellow]Enter[/] to close", id="help_footer")
 
 class HistoryDashboard(App):
     TITLE = "PowerShell History Navigator"
-    SUB_TITLE = "Browse, Search, Copy & Clean History (Newest First)"
+    SUB_TITLE = "Browse, Search, Copy & Clean History"
 
-    THEMES = ["monokai", "dracula"]
+    THEMES = ["monokai", "dracula", "tokyonight"]
     current_theme_idx: int = reactive(0)
+    sort_newest_first: bool = reactive(True)
 
     CSS = """
     Screen {
@@ -255,54 +348,109 @@ class HistoryDashboard(App):
         overflow-x: hidden;
     }
 
+    /* === Monokai Theme (Full Immersion) === */
     Screen.theme-monokai {
         background: #272822;
         color: #f8f8f2;
     }
-
     Screen.theme-monokai #preview_container {
         border: round #a6e22e;
         background: #1e1f1c;
     }
-
     Screen.theme-monokai #preview_title {
         color: #fd971f;
     }
-
     Screen.theme-monokai #history_table {
         border: round #66d9ef;
         background: #272822;
     }
-
+    Screen.theme-monokai DataTable > .datatable--header {
+        background: #1e1f1c;
+        color: #66d9ef;
+        text-style: bold;
+    }
+    Screen.theme-monokai DataTable > .datatable--cursor {
+        background: #3e3d32;
+        color: #a6e22e;
+        text-style: bold;
+    }
     Screen.theme-monokai #search_input {
         border: round #f92672;
         background: #1e1f1c;
         color: #f8f8f2;
     }
+    Screen.theme-monokai #search_input:focus {
+        border: double #a6e22e;
+    }
 
+    /* === Dracula Theme (Full Immersion) === */
     Screen.theme-dracula {
         background: #282a36;
         color: #f8f8f2;
     }
-
     Screen.theme-dracula #preview_container {
         border: round #bd93f9;
         background: #1e1f29;
     }
-
     Screen.theme-dracula #preview_title {
         color: #ff79c6;
     }
-
     Screen.theme-dracula #history_table {
         border: round #8be9fd;
         background: #282a36;
     }
-
+    Screen.theme-dracula DataTable > .datatable--header {
+        background: #1e1f29;
+        color: #8be9fd;
+        text-style: bold;
+    }
+    Screen.theme-dracula DataTable > .datatable--cursor {
+        background: #44475a;
+        color: #50fa7b;
+        text-style: bold;
+    }
     Screen.theme-dracula #search_input {
-        border: round #50fa7b;
+        border: round #ff79c6;
         background: #1e1f29;
         color: #f8f8f2;
+    }
+    Screen.theme-dracula #search_input:focus {
+        border: double #50fa7b;
+    }
+
+    /* === Tokyo Night Theme (Full Immersion) === */
+    Screen.theme-tokyonight {
+        background: #1a1b26;
+        color: #c0caf5;
+    }
+    Screen.theme-tokyonight #preview_container {
+        border: round #7aa2f7;
+        background: #16161e;
+    }
+    Screen.theme-tokyonight #preview_title {
+        color: #bb9af7;
+    }
+    Screen.theme-tokyonight #history_table {
+        border: round #7dcfff;
+        background: #1a1b26;
+    }
+    Screen.theme-tokyonight DataTable > .datatable--header {
+        background: #16161e;
+        color: #7aa2f7;
+        text-style: bold;
+    }
+    Screen.theme-tokyonight DataTable > .datatable--cursor {
+        background: #292e42;
+        color: #7dcfff;
+        text-style: bold;
+    }
+    Screen.theme-tokyonight #search_input {
+        border: round #bb9af7;
+        background: #16161e;
+        color: #c0caf5;
+    }
+    Screen.theme-tokyonight #search_input:focus {
+        border: double #7aa2f7;
     }
 
     #main_container {
@@ -314,7 +462,7 @@ class HistoryDashboard(App):
     #preview_container {
         height: 32%;
         padding: 0 1;
-        margin-top: 1;
+        margin-top: 0;
         margin-bottom: 0;
         overflow-x: hidden;
     }
@@ -352,11 +500,15 @@ class HistoryDashboard(App):
 
     BINDINGS = [
         Binding("slash", "focus_search", "Search (/)"),
+        Binding("colon", "focus_colon_search", "Command Mode (:)"),
         Binding("escape", "clear_or_blur", "Back / Clear"),
         Binding("up", "nav_up", "Up", show=False),
         Binding("down", "nav_down", "Down", show=False),
         Binding("delete", "delete_command", "Delete"),
         Binding("d", "delete_command", "Delete (D)"),
+        Binding("m", "edit_command", "In-Place Edit (M)"),
+        Binding("i", "edit_command", "Edit (I)", show=False),
+        Binding("s", "toggle_sort_order", "Sort Order (S)"),
         Binding("x", "delete_filtered", "Delete Filtered (X)"),
         Binding("shift+delete", "delete_filtered", "Delete Filtered", show=False),
         Binding("enter", "copy_command", "Copy & Exit"),
@@ -378,6 +530,7 @@ class HistoryDashboard(App):
     dud_flags: List[bool] = reactive([])
     filtered_indices: List[int] = reactive([])
     status_msg = reactive("Ready")
+    _last_delete_time: float = 0.0
 
     def compose(self) -> ComposeResult:
         with Vertical(id="main_container"):
@@ -386,7 +539,7 @@ class HistoryDashboard(App):
                 yield Static("", id="preview_text")
             yield DataTable(id="history_table", cursor_type="row")
         with Vertical(id="search_box"):
-            yield SearchInput(placeholder="Search (:red: for duds, X to delete filtered, ? for Help)...", id="search_input")
+            yield SearchInput(placeholder="Type : for commands (:help, :red, :edit, :sort, :theme, :q) or search...", id="search_input")
 
     def on_mount(self) -> None:
         table = self.query_one("#history_table", DataTable)
@@ -397,17 +550,41 @@ class HistoryDashboard(App):
 
     def apply_theme_classes(self) -> None:
         theme = self.THEMES[self.current_theme_idx]
-        self.screen.remove_class("theme-monokai")
-        self.screen.remove_class("theme-dracula")
+        for t in self.THEMES:
+            self.screen.remove_class(f"theme-{t}")
         self.screen.add_class(f"theme-{theme}")
 
     def action_toggle_theme(self) -> None:
         self.current_theme_idx = (self.current_theme_idx + 1) % len(self.THEMES)
         self.apply_theme_classes()
-        theme_name = self.THEMES[self.current_theme_idx].title()
+        theme_name = self.THEMES[self.current_theme_idx].replace("tokyonight", "Tokyo Night").title()
         self.notify(f"Theme Palette: {theme_name} 🎨", timeout=2.0)
         table = self.query_one("#history_table", DataTable)
         self.update_preview_for_row(table.cursor_row)
+
+    def set_theme_by_name(self, name: str) -> None:
+        name_clean = name.lower().replace(" ", "").replace("-", "")
+        if "mono" in name_clean:
+            self.current_theme_idx = 0
+        elif "drac" in name_clean:
+            self.current_theme_idx = 1
+        elif "tokyo" in name_clean or "night" in name_clean:
+            self.current_theme_idx = 2
+        else:
+            self.notify(f"Available themes: :monokai, :dracula, :tokyonight", timeout=2.5)
+            return
+        self.apply_theme_classes()
+        theme_name = self.THEMES[self.current_theme_idx].replace("tokyonight", "Tokyo Night").title()
+        self.notify(f"Theme: {theme_name} 🎨", timeout=2.0)
+        table = self.query_one("#history_table", DataTable)
+        self.update_preview_for_row(table.cursor_row)
+
+    def action_toggle_sort_order(self) -> None:
+        self.sort_newest_first = not self.sort_newest_first
+        mode = "Newest at Top (Reverse-Chronological)" if self.sort_newest_first else "Newest at Bottom (Classic Terminal)"
+        self.notify(f"Sort Order: {mode} 🔃", timeout=2.5)
+        search_val = self.query_one("#search_input", SearchInput).value
+        self.apply_filter(search_val)
 
     def action_show_help(self) -> None:
         self.push_screen(HelpModal())
@@ -451,22 +628,28 @@ class HistoryDashboard(App):
         q = query.strip().lower()
         filter_duds_only = False
 
-        # Support :red:, :red, :err, :error, :bad, :dud tags
-        dud_triggers = [":red:", ":red", ":err", ":error", ":bad", ":dud"]
-        matched_trigger = next((t for t in dud_triggers if q.startswith(t)), None)
+        # Support :red, :duds, :err, :error, :bad tags
+        dud_triggers = [":red", ":duds", ":dud", ":err", ":error", ":bad"]
+        matched_trigger = next((t for t in dud_triggers if q == t or q.startswith(t + " ")), None)
         if matched_trigger:
             filter_duds_only = True
             q = q[len(matched_trigger):].strip()
 
         total = len(self.all_commands)
         indices = []
-        for i in range(total - 1, -1, -1):
+
+        if self.sort_newest_first:
+            range_iter = range(total - 1, -1, -1)
+        else:
+            range_iter = range(0, total)
+
+        for i in range_iter:
             cmd = self.all_commands[i]
             is_dud = self.dud_flags[i] if i < len(self.dud_flags) else False
 
             if filter_duds_only and not is_dud:
                 continue
-            if q and q not in cmd.lower():
+            if q and not q.startswith(":") and q not in cmd.lower():
                 continue
             indices.append(i)
 
@@ -514,7 +697,11 @@ class HistoryDashboard(App):
             )
 
         if len(self.filtered_indices) > 0:
-            new_row = min(max(0, current_row if current_row is not None else 0), len(self.filtered_indices) - 1)
+            if not self.sort_newest_first and (current_row is None or current_row == 0):
+                # In chronological mode, preselect and scroll to the bottom row
+                new_row = len(self.filtered_indices) - 1
+            else:
+                new_row = min(max(0, current_row if current_row is not None else 0), len(self.filtered_indices) - 1)
             table.move_cursor(row=new_row)
             self.update_preview_for_row(new_row)
         else:
@@ -524,7 +711,46 @@ class HistoryDashboard(App):
         self.apply_filter(event.value)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
-        self.query_one("#history_table", DataTable).focus()
+        val = event.value.strip()
+        if val.startswith(":"):
+            # Command Mode execution
+            cmd_body = val[1:].strip().lower()
+            cmd_parts = cmd_body.split()
+            base_cmd = cmd_parts[0] if cmd_parts else ""
+
+            if base_cmd in ("q", "quit", "exit"):
+                self.exit()
+            elif base_cmd in ("help", "keys", "?"):
+                self.action_show_help()
+            elif base_cmd in ("theme", "t"):
+                if len(cmd_parts) > 1:
+                    self.set_theme_by_name(cmd_parts[1])
+                else:
+                    self.action_toggle_theme()
+            elif base_cmd in ("monokai", "dracula", "tokyonight", "tokyo"):
+                self.set_theme_by_name(base_cmd)
+            elif base_cmd in ("edit", "mod", "m"):
+                self.action_edit_command()
+            elif base_cmd in ("del", "delete", "d"):
+                self.action_delete_command()
+            elif base_cmd in ("purge", "clean", "x"):
+                self.action_delete_filtered()
+            elif base_cmd in ("sort", "invert", "s"):
+                self.action_toggle_sort_order()
+            elif base_cmd in ("subl", "code", "open", "e"):
+                self.action_open_in_editor()
+            elif base_cmd in ("reload", "refresh", "sync", "r"):
+                self.action_reload_history()
+            elif base_cmd in ("copy", "c"):
+                self.action_copy_command()
+            elif base_cmd in ("red", "duds", "dud", "err"):
+                # Retain filter in search bar and focus table
+                self.query_one("#history_table", DataTable).focus()
+            else:
+                self.notify(f"Unknown command: :{base_cmd} (Type :help for commands)", timeout=3.0)
+        else:
+            # Normal search submitted: transfer focus to table
+            self.query_one("#history_table", DataTable).focus()
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         self.update_preview_for_row(event.cursor_row)
@@ -552,7 +778,7 @@ class HistoryDashboard(App):
                 syntax = Syntax(
                     text,
                     "powershell",
-                    theme=theme,
+                    theme="monokai" if theme == "monokai" else "dracula",
                     line_numbers=False,
                     word_wrap=True,
                     background_color="default"
@@ -565,6 +791,14 @@ class HistoryDashboard(App):
     def action_focus_search(self) -> None:
         inp = self.query_one("#search_input", SearchInput)
         inp.focus()
+
+    def action_focus_colon_search(self) -> None:
+        """Command Mode: Focuses input bar and adds ':' character."""
+        inp = self.query_one("#search_input", SearchInput)
+        inp.focus()
+        if not inp.value.startswith(":"):
+            inp.value = ":" + inp.value
+        inp.cursor_position = len(inp.value)
 
     def action_clear_or_blur(self) -> None:
         inp = self.query_one("#search_input", SearchInput)
@@ -613,16 +847,12 @@ class HistoryDashboard(App):
             table.move_cursor(row=new_row)
             self.update_preview_for_row(new_row)
 
-    _last_delete_time: float = 0.0
-
     def action_delete_command(self) -> None:
         search_input = self.query_one("#search_input", SearchInput)
         if search_input.has_focus:
-            return  # Never trigger delete when typing in the search bar
+            return
 
         now = time.time()
-        # Debounce key-repeat: ensure at least 0.35s between consecutive deletes
-        # so holding down 'd' or 'delete' cannot runaway delete commands
         if now - self._last_delete_time < 0.35:
             return
         self._last_delete_time = now
@@ -637,20 +867,47 @@ class HistoryDashboard(App):
         if real_idx < len(self.dud_flags):
             self.dud_flags.pop(real_idx)
 
-        # Save to disk
         self.save_history_to_file()
         self.status_msg = f"Deleted command #{real_idx + 1}: '{deleted_cmd[:40]}...'"
 
-        # Re-apply filter
         search_val = search_input.value
         self.apply_filter(search_val)
+
+    def action_edit_command(self) -> None:
+        """Opens interactive modal to edit selected command in-place."""
+        table = self.query_one("#history_table", DataTable)
+        row = table.cursor_row
+        if row is None or row < 0 or row >= len(self.filtered_indices):
+            self.notify("Select a command to edit.", timeout=2.0)
+            return
+
+        real_idx = self.filtered_indices[row]
+        current_cmd = self.all_commands[real_idx]
+
+        def on_edit_result(new_command: Optional[str]) -> None:
+            if new_command is None:
+                return
+
+            new_clean = new_command.strip()
+            if not new_clean:
+                self.notify("Edited command cannot be empty.", timeout=2.0)
+                return
+
+            self.all_commands[real_idx] = new_clean
+            self.dud_flags[real_idx] = is_dud_command(new_clean)
+            self.save_history_to_file()
+            self.notify(f"Updated command #{real_idx + 1} on disk! 💾", timeout=2.5)
+
+            search_val = self.query_one("#search_input", SearchInput).value
+            self.apply_filter(search_val)
+
+        self.push_screen(EditCommandModal(real_idx + 1, current_cmd), on_edit_result)
 
     def action_delete_filtered(self) -> None:
         """Batch delete all currently filtered commands (with safety check + double confirmation)."""
         search_input = self.query_one("#search_input", SearchInput)
         query = search_input.value.strip()
 
-        # 1. Safety check: must have active filter and not match entire unfiltered history
         if not query or len(self.filtered_indices) == len(self.all_commands):
             self.notify("⚠️ Safety Block: Bulk delete requires an active search filter!", timeout=3.5)
             return
@@ -660,7 +917,6 @@ class HistoryDashboard(App):
             self.notify("No filtered commands to delete.", timeout=2.0)
             return
 
-        # 2. Step 1 Confirmation Modal
         step1_title = "⚠️ Confirm Bulk Delete (Step 1 of 2)"
         step1_msg = (
             f"You are about to delete ALL [bold yellow]{count_to_delete}[/] commands\n"
@@ -673,7 +929,6 @@ class HistoryDashboard(App):
                 self.notify("Bulk delete cancelled.", timeout=2.0)
                 return
 
-            # 3. Step 2 Final Confirmation Modal
             step2_title = "🚨 FINAL CONFIRMATION (Step 2 of 2)"
             step2_msg = (
                 f"[bold red]PERMANENT ACTION:[/] This will permanently remove\n"
@@ -686,7 +941,6 @@ class HistoryDashboard(App):
                     self.notify("Bulk delete cancelled.", timeout=2.0)
                     return
 
-                # Execute batch deletion
                 delete_set = set(self.filtered_indices)
                 new_commands = []
                 new_dud_flags = []
@@ -698,10 +952,7 @@ class HistoryDashboard(App):
                 self.all_commands = new_commands
                 self.dud_flags = new_dud_flags
 
-                # Save changes to disk
                 self.save_history_to_file()
-
-                # Reset search and refresh
                 search_input.value = ""
                 self.apply_filter("")
                 self.notify(f"🗑️ Deleted {count_to_delete} commands from history!", timeout=3.5)
@@ -755,7 +1006,6 @@ class HistoryDashboard(App):
 
         target_file = str(self.history_path)
 
-        # 1. Parse EDITOR / VISUAL environment variables
         editor_env = os.environ.get("EDITOR") or os.environ.get("VISUAL")
         if editor_env:
             parts = shlex.split(editor_env, posix=False)
@@ -782,7 +1032,6 @@ class HistoryDashboard(App):
                     except Exception:
                         pass
 
-        # 2. Check for Sublime Text directly
         subl_candidates = [
             r"C:\Program Files\Sublime Text 3\subl.exe",
             r"C:\Program Files\Sublime Text\subl.exe",
@@ -799,7 +1048,6 @@ class HistoryDashboard(App):
                 except Exception:
                     continue
 
-        # 3. Fallback to Windows default registered editor for .txt
         try:
             os.startfile(target_file)
             self.status_msg = "Opened history in default editor"
@@ -807,7 +1055,6 @@ class HistoryDashboard(App):
         except Exception:
             pass
 
-        # 4. Fallback to Notepad
         try:
             subprocess.Popen(["notepad.exe", target_file])
             self.status_msg = "Opened history in Notepad"
@@ -815,7 +1062,8 @@ class HistoryDashboard(App):
             self.status_msg = f"Error opening editor: {e}"
 
     def action_reload_history(self) -> None:
-        self.load_history()
+        self.load_history(preserve_filter=True)
+        self.notify("History reloaded from disk 🔄", timeout=2.0)
 
     def get_selected_command(self) -> Optional[str]:
         table = self.query_one("#history_table", DataTable)
