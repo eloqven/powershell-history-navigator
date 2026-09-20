@@ -3,6 +3,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import List, Optional
 
@@ -612,7 +613,20 @@ class HistoryDashboard(App):
             table.move_cursor(row=new_row)
             self.update_preview_for_row(new_row)
 
+    _last_delete_time: float = 0.0
+
     def action_delete_command(self) -> None:
+        search_input = self.query_one("#search_input", SearchInput)
+        if search_input.has_focus:
+            return  # Never trigger delete when typing in the search bar
+
+        now = time.time()
+        # Debounce key-repeat: ensure at least 0.35s between consecutive deletes
+        # so holding down 'd' or 'delete' cannot runaway delete commands
+        if now - self._last_delete_time < 0.35:
+            return
+        self._last_delete_time = now
+
         table = self.query_one("#history_table", DataTable)
         row = table.cursor_row
         if row is None or row < 0 or row >= len(self.filtered_indices):
@@ -628,7 +642,7 @@ class HistoryDashboard(App):
         self.status_msg = f"Deleted command #{real_idx + 1}: '{deleted_cmd[:40]}...'"
 
         # Re-apply filter
-        search_val = self.query_one("#search_input", SearchInput).value
+        search_val = search_input.value
         self.apply_filter(search_val)
 
     def action_delete_filtered(self) -> None:
