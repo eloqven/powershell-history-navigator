@@ -26,7 +26,7 @@ If you use PowerShell heavily, you have likely encountered this terminal issue:
 3. Suddenly, PowerShell's **PSReadLine** hits that multi-line block: the cursor jumps unpredictably across console rows, overwriting previous lines and getting stuck in a visual loop between 2–3 commands.
 4. Because PSReadLine saves all commands directly to disk (`ConsoleHost_history.txt`), **this glitch persists across terminal restarts and never goes away on its own.**
 
-**PowerShell History Navigator** was engineered to solve this permanently. It provides a dedicated, lightweight, and responsive Terminal User Interface (TUI) to browse, search, copy, edit, and surgically remove problematic commands from history on disk.
+**PowerShell History Navigator** provides a terminal interface (TUI) to browse, search, copy, edit, and remove commands from `ConsoleHost_history.txt` on disk.
 
 ---
 
@@ -35,7 +35,7 @@ If you use PowerShell heavily, you have likely encountered this terminal issue:
 - **Latest-First Ordering**: Inspect your command stream starting from your most recent command at the top, or toggle to classic terminal bottom-first order.
 - **Instant Live Search & Filter**: Real-time incremental search bar docked at the bottom of the screen with instant `↑`/`↓` table navigation.
 - **Vim-Style Command Mode (`:`)**: Press `:` to trigger 1-word commands like `:red`, `:edit`, `:sort`, `:theme`, `:purge`, and `:quit`.
-- **Bad Syntax & Dud Detection (`:red`)**: Proprietary state-machine analyzer identifies syntax errors, broken quotes, unmatched brackets, and accidental mouse-pasted CLI stack traces, highlighting them in bold red. Type `:red` to isolate all duds.
+- **Bad Syntax & Dud Detection (`:red`)**: A lexical state-machine identifies syntax errors, broken quotes, unmatched brackets, and pasted error tracebacks, highlighting them in bold red. Type `:red` to isolate all duds.
 - **In-Place Command Editing (`M` / `:edit`)**: Pop open an interactive modal to edit typos or modify parameters in past commands directly before saving or copying.
 - **Surgical & Bulk History Purging**:
   - Delete individual commands with `Delete` or `D` (triggered on key-up to prevent accidental repeats).
@@ -86,7 +86,7 @@ Rather than executing untrusted past commands in a live shell, the TUI runs a de
 4. **Balanced Delimiter & Quote Lexer**: Tracks single quotes (`'`), double quotes (`"`), PowerShell backtick escapes (`` ` ``), and nested bracket stacks (`()`, `[]`, `{}`) while respecting quote isolation (e.g., `'` inside `""` is treated as literal text).
 
 ### 3. Non-Blocking Editor Dispatch
-When launching editors (e.g., Sublime Text via `$env:EDITOR`), the tool utilizes `shlex.split` to parse environment variables, strips blocking flags (`--wait` / `-w`), and resolves binary paths across Windows standard installation directories before dispatching asynchronous child processes via `subprocess.Popen`.
+When launching editors (such as Sublime Text or `$env:EDITOR`), the tool parses arguments with `shlex.split`, removes blocking flags (`--wait` / `-w`), and checks standard installation directories before starting the process with `subprocess.Popen`.
 
 ---
 
@@ -195,9 +195,9 @@ Press **`S`** to toggle between two distinct navigation paradigms:
 
 ### 6. Full-TUI Theme Immersion (`T` or `:theme`)
 Press **`T`** to cycle between three themes that transform the entire layout (screen background, table headers, cursor highlight colors, preview borders, and PowerShell syntax highlighting):
-- **Monokai**: Classic vibrant `#272822` dark background with lime-green headers and magenta accents.
-- **Dracula**: Deep purple `#282a36` with cyan/green cursor and electric pink borders.
-- **Tokyo Night**: Ultra-sleek `#1a1b26` with electric indigo headers and neon blue highlights.
+- **Monokai**: `#272822` dark background with green headers and magenta accents.
+- **Dracula**: `#282a36` purple background with cyan headers and pink borders.
+- **Tokyo Night**: `#1a1b26` dark blue background with indigo headers and blue borders.
 
 ---
 
