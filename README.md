@@ -11,61 +11,63 @@
 [![Platform Windows](https://img.shields.io/badge/platform-Windows%20%7C%20PowerShell-lightgrey.svg)](https://learn.microsoft.com/en-us/powershell/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-[Features](#-key-features) • [The Origin Story](#-why-this-exists-the-origin-story) • [Architecture Deep-Dive](#-under-the-hood-for-engineers--ai-agents) • [Installation](#-quickstart--installation) • [Keybindings](#-keyboard-shortcuts)
+[Features](#-key-features) • [The Origin Story](#the-origin-story-why-this-exists) • [Architecture Deep-Dive](#under-the-hood-for-engineers--ai-agents) • [Installation](#-quickstart--installation) • [Keybindings](#keyboard-shortcuts--command-mode)
 
 </div>
 
 ---
 
-## ⚡ The Origin Story: Why This Exists
+## The Origin Story: Why This Exists
 
-If you use PowerShell heavily, you have likely encountered this infuriating terminal bug:
+If you use PowerShell heavily, you have likely encountered this terminal issue:
 
 1. You paste a multi-line script, a large JSON payload, or an authentication token into the console.
 2. Later, you press **`Up Arrow`** or use **`Ctrl + R` (Reverse Search)** to recall a previous command.
-3. Suddenly, PowerShell's **PSReadLine** hits that multi-line monster: the cursor jumps unpredictably across console rows, overwriting previous lines and getting stuck in an infinite visual loop between 2–3 commands.
+3. Suddenly, PowerShell's **PSReadLine** hits that multi-line block: the cursor jumps unpredictably across console rows, overwriting previous lines and getting stuck in a visual loop between 2–3 commands.
 4. Because PSReadLine saves all commands directly to disk (`ConsoleHost_history.txt`), **this glitch persists across terminal restarts and never goes away on its own.**
 
-**PowerShell History Navigator** was engineered to solve this permanently. It provides a dedicated, lightweight, and responsive Terminal User Interface (TUI) to browse, search, copy, and surgically remove problematic commands from history on disk.
+**PowerShell History Navigator** was engineered to solve this permanently. It provides a dedicated, lightweight, and responsive Terminal User Interface (TUI) to browse, search, copy, edit, and surgically remove problematic commands from history on disk.
 
 ---
 
 ## ✨ Key Features
 
-- **⚡ Latest-First Ordering**: Inspect your command stream starting from your most recent command at the very top, flowing naturally into the past.
-- **🔍 Instant Live Search & Filter**: Real-time incremental search bar docked at the bottom of the screen.
-- **🔴 Bad Syntax & Dud Detection (`:red:`)**: Proprietary state-machine analyzer identifies syntax errors, broken quotes, unmatched brackets, and accidental mouse-pasted CLI stack traces, highlighting them in bold red. Type `:red:` in search to isolate all duds.
-- **🗑️ Surgical & Bulk History Purging**:
-  - Delete individual commands with `Delete` or `D`.
-  - Delete **all filtered commands** at once with `X` (safeguarded by active filter requirements and double confirmation modals).
-- **🎨 Dual Theme Palette (`T`)**: Switch dynamically between **Monokai** and **Dracula** color schemes with full token syntax highlighting.
-- **📝 Editor Integration (`E`)**: One-key jump directly into **Sublime Text**, VS Code, or your default text editor.
-- **📋 Direct Clipboard Copy (`Enter` / `C`)**: Hit `Enter` to copy the selected command to your Windows clipboard and exit immediately.
-- **⌨️ On-Screen Keymap Overlay (`?` / `H` / `F1`)**: Modal shortcut cheat-sheet accessible at any moment.
+- **Latest-First Ordering**: Inspect your command stream starting from your most recent command at the top, or toggle to classic terminal bottom-first order.
+- **Instant Live Search & Filter**: Real-time incremental search bar docked at the bottom of the screen with instant `↑`/`↓` table navigation.
+- **Vim-Style Command Mode (`:`)**: Press `:` to trigger 1-word commands like `:red`, `:edit`, `:sort`, `:theme`, `:purge`, and `:quit`.
+- **Bad Syntax & Dud Detection (`:red`)**: Proprietary state-machine analyzer identifies syntax errors, broken quotes, unmatched brackets, and accidental mouse-pasted CLI stack traces, highlighting them in bold red. Type `:red` to isolate all duds.
+- **In-Place Command Editing (`M` / `:edit`)**: Pop open an interactive modal to edit typos or modify parameters in past commands directly before saving or copying.
+- **Surgical & Bulk History Purging**:
+  - Delete individual commands with `Delete` or `D` (triggered on key-up to prevent accidental repeats).
+  - Delete **all filtered commands** at once with `X` or `:purge` (safeguarded by active filter requirements and double confirmation modals).
+- **Full-TUI Theme Engine (`T` / `:theme`)**: Switch dynamically between **Monokai**, **Dracula**, and **Tokyo Night** across the entire UI layout.
+- **Editor Integration (`E` / `:subl`)**: One-key jump directly into Sublime Text, VS Code, or your default text editor.
+- **Direct Clipboard Copy (`Enter` / `C`)**: Hit `Enter` to copy the selected command to your Windows clipboard and exit immediately.
+- **On-Screen Keymap Overlay (`?` / `H` / `F1`)**: Modal shortcut cheat-sheet accessible at any moment.
 
 ---
 
-## 📸 Screenshots & Layout
+## Screenshots & Layout
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│  ⚡ Command Preview (#4748 - 54 chars)                                 │
+│  Command Preview (#4748 - 54 chars)                                    │
 │  Get-ChildItem -Path C:\Projects -Recurse | Where-Object Length -gt 1MB│
 ├────────────────────────────────────────────────────────────────────────┤
 │  #     Len   Command                                                   │
 │  4748  74    Get-ChildItem -Path C:\Projects -Recurse | Where-Object...│
 │  4747  18    git status                                                │
 │  4746  32    python -m pytest tests/unit                               │
-│  4745  104   ✖ At line:10 char:1 + CategoryInfo : ObjectNotFound       │
+│  4745  104   [!] At line:10 char:1 + CategoryInfo : ObjectNotFound     │
 │  4744  26    npm run build --prefix frontend                           │
 ├────────────────────────────────────────────────────────────────────────┤
-│ > Type to search history (:red: for duds, X to delete filtered, ? Help)│
+│ > Type to search history (:red for duds, X to delete filtered, ? Help) │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🧠 Under the Hood: For Engineers & AI Agents
+## Under the Hood: For Engineers & AI Agents
 
 ### 1. PSReadLine History Storage Semantics
 PowerShell's PSReadLine module writes command history to:
@@ -113,7 +115,7 @@ python history_tui.py
 
 ---
 
-## ⚡ Add a Global `hist` Command in PowerShell
+## Add a Global `hist` Command in PowerShell
 
 Add a quick alias to your PowerShell `$PROFILE` so you can launch the navigator from any terminal window by typing `hist`:
 
@@ -127,7 +129,7 @@ function hist { python "D:\powershell-history-navigator\history_tui.py" }
 
 ---
 
-## 📸 Interface Preview (with Shortcut Keys Modal)
+## Interface Preview (with Shortcut Keys Modal)
 
 <div align="center">
 
@@ -141,14 +143,14 @@ function hist { python "D:\powershell-history-navigator\history_tui.py" }
 
 ## 📖 How to Use & Workflow Guide
 
-### 1. 🔍 Searching & Instant Navigation
+### 1. Searching & Instant Navigation
 - **Live Search**: Press **`/`** to jump to the search bar. As you type, the table updates in real-time.
 - **Seamless Arrow Keys**: Press **`↑`** or **`↓`** at any moment — even while actively typing in the search box — to immediately highlight and navigate through matching commands.
 - **Clear Search**: Press **`Esc`** to clear your search query and return focus to the command table.
 
 ---
 
-### 2. ⌨️ Vim-Style Command Mode (`:`)
+### 2. Vim-Style Command Mode (`:`)
 Press **`:`** (or `Shift + ;`) from anywhere in the app to enter **Command Mode**. The bottom bar automatically opens with `:` ready for you to execute 1-word commands:
 
 - **`:red`** or **`:duds`** — Isolate and filter only broken syntax / dud commands.
@@ -164,7 +166,7 @@ Press **`:`** (or `Shift + ;`) from anywhere in the app to enter **Command Mode*
 
 ---
 
-### 3. ✏️ In-Place Command Editing (`M` or `:edit`)
+### 3. In-Place Command Editing (`M` or `:edit`)
 Found a useful past command with a small typo, outdated branch name, or wrong path?
 1. Highlight the command in the list and press **`M`** (or **`I`**, or type `:edit`).
 2. An interactive editing window pops up pre-loaded with the full command.
@@ -173,40 +175,40 @@ Found a useful past command with a small typo, outdated branch name, or wrong pa
 
 ---
 
-### 4. 🔴 Finding & Purging Syntax Errors & Duds (`:red` ➔ `X`)
+### 4. Finding & Purging Syntax Errors & Duds (`:red` -> `X`)
 Accidentally pasted CLI error output, multiline stack traces, or unbalanced strings into your terminal?
 1. Type **`:red`** (or **`:duds`**) in the bottom bar. The table immediately filters to show **only** problematic commands flagged with red indicators (`[!]` and `[Syntax Error]`).
 2. To delete a single dud, press **`Delete`** or **`D`**.
 3. To delete **ALL matching duds at once**:
    - Press **`X`** (or **`Shift + Delete`**, or type `:purge`).
-   - Pass through the two-step safety confirmation modals (`Enter` ➔ `Enter`).
+   - Pass through the two-step safety confirmation modals (`Enter` -> `Enter`).
    - All bad commands are permanently wiped from your history file on disk!
 
 ---
 
-### 5. 🔃 Custom Sorting & Classic Terminal Mode (`S` or `:sort`)
+### 5. Custom Sorting & Classic Terminal Mode (`S` or `:sort`)
 Press **`S`** to toggle between two distinct navigation paradigms:
 - **Newest First (Default)**: Your most recent commands are at Row #1 (Top), allowing you to review recent work from top to bottom.
 - **Classic Terminal Mode (Oldest First)**: Mirrors standard terminal prompt history where oldest commands are at the top and the newest command is preselected at the very bottom (Row #N).
 
 ---
 
-### 6. 🎨 Full-TUI Theme Immersion (`T` or `:theme`)
+### 6. Full-TUI Theme Immersion (`T` or `:theme`)
 Press **`T`** to cycle between three themes that transform the entire layout (screen background, table headers, cursor highlight colors, preview borders, and PowerShell syntax highlighting):
-- 🟢 **Monokai**: Classic vibrant `#272822` dark background with lime-green headers and magenta accents.
-- 🟣 **Dracula**: Deep purple `#282a36` with cyan/green cursor and electric pink borders.
-- 🔵 **Tokyo Night**: Ultra-sleek `#1a1b26` with electric indigo headers and neon blue highlights.
+- **Monokai**: Classic vibrant `#272822` dark background with lime-green headers and magenta accents.
+- **Dracula**: Deep purple `#282a36` with cyan/green cursor and electric pink borders.
+- **Tokyo Night**: Ultra-sleek `#1a1b26` with electric indigo headers and neon blue highlights.
 
 ---
 
-### 7. 📝 Sublime Text & External Editor Integration (`E` / `R`)
+### 7. Sublime Text & External Editor Integration (`E` / `R`)
 - Press **`E`** (or **`O`**, or `:subl`) to open `ConsoleHost_history.txt` directly in Sublime Text or your configured `$env:EDITOR`.
 - Edit, clean, or reorganize your history manually in your editor and save.
 - Switch back to the TUI and press **`R`** (or `:reload`) to sync the changes immediately. Any active search query is preserved automatically.
 
 ---
 
-## ⌨️ Keyboard Shortcuts & Command Mode
+## Keyboard Shortcuts & Command Mode
 
 | Key | Colon Command | Action | Description |
 |:---|:---|:---|:---|
@@ -221,8 +223,8 @@ Press **`T`** to cycle between three themes that transform the entire layout (sc
 | `M` / `I` | `:edit` / `:mod` | **In-Place Edit** | Open interactive editor to modify command in-place |
 | `Delete` / `D` | `:del` / `:delete` | **Delete Single** | Permanently delete selected command from history |
 | `X` / `Shift+Del` | `:purge` / `:clean` | **Bulk Delete** | Delete **all filtered commands** (requires 2 confirmations) |
-| `S` | `:sort` / `:invert` | **Toggle Sort** | Flip sorting order (Newest First ⇄ Oldest First) |
-| `T` | `:theme` | **Toggle Theme** | Cycle themes (**Monokai** ⇄ **Dracula** ⇄ **Tokyo Night**) |
+| `S` | `:sort` / `:invert` | **Toggle Sort** | Flip sorting order (Newest First <-> Oldest First) |
+| `T` | `:theme` | **Toggle Theme** | Cycle themes (**Monokai** <-> **Dracula** <-> **Tokyo Night**) |
 | `E` / `O` | `:subl` / `:open` | **Open in Editor** | Open `ConsoleHost_history.txt` in Sublime Text / Editor |
 | `R` | `:reload` / `:sync`| **Reload** | Re-read history file from disk to sync new commands |
 | `?` / `H` / `F1` | `:help` / `:keys` | **Help Overlay** | Open on-screen keybinding cheat-sheet |
@@ -230,7 +232,7 @@ Press **`T`** to cycle between three themes that transform the entire layout (sc
 
 ---
 
-## 🛡️ Safety & Data Integrity
+## Safety & Data Integrity
 
 - **Automatic Backups**: Modifying or cleaning history writes safely to `ConsoleHost_history.txt`.
 - **Bulk Deletion Safeguard**: The bulk delete command (`X` / `:purge`) is strictly blocked when all commands are visible, preventing accidental full wipes.
@@ -238,6 +240,6 @@ Press **`T`** to cycle between three themes that transform the entire layout (sc
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the [MIT License](./LICENSE).

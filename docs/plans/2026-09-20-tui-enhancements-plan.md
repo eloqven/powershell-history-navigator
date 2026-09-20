@@ -170,6 +170,6 @@ Screen.theme-dracula #search_input:focus {
 ## Definition of Done
 
 - [x] Implementation plan documented and approved.
-- [ ] U-01 through U-04 implemented in `history_tui.py`.
-- [ ] Unit tests updated and passing 100%.
+- [x] U-01 through U-04 implemented in `history_tui.py` (Full Theming, Command Mode `:`, In-Place Editor `M`, Sort Order `S`).
+- [x] Unit & TUI interaction test suite created in `tests/test_tui_interactions.py` (9/9 tests passing).
 - [ ] Pushed to GitHub repository.
