@@ -9,3 +9,6 @@ env/
 .env
 .idea/
 .vscode/
+
+# Compound Engineering scratch space
+.context/compound-engineering/
