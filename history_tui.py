@@ -13,25 +13,51 @@ from textual.app import App, ComposeResult
 from textual.containers import Vertical, Horizontal
 from textual.screen import ModalScreen
 from textual.widgets import Input, DataTable, Static, Button, TextArea
+from textual.widgets.input import Selection
 from textual.binding import Binding
 from textual.reactive import reactive
 
 def get_history_file_path() -> Path:
     app_data = os.environ.get("APPDATA", "")
-    paths = [
-        Path(app_data) / "Microsoft" / "Windows" / "PowerShell" / "PSReadLine" / "ConsoleHost_history.txt",
-        Path(app_data) / "Microsoft" / "PowerShell" / "PSReadLine" / "ConsoleHost_history.txt",
-    ]
+    paths = []
+    if app_data:
+        paths.extend([
+            Path(app_data) / "Microsoft" / "Windows" / "PowerShell" / "PSReadLine" / "ConsoleHost_history.txt",
+            Path(app_data) / "Microsoft" / "PowerShell" / "PSReadLine" / "ConsoleHost_history.txt",
+        ])
+    # Cross-platform fallback (macOS / Linux PowerShell Core)
+    home = Path.home()
+    paths.extend([
+        home / ".local" / "share" / "powershell" / "PSReadLine" / "ConsoleHost_history.txt",
+        home / ".config" / "powershell" / "PSReadLine" / "ConsoleHost_history.txt",
+    ])
     for p in paths:
         if p.exists():
             return p
-    return paths[0]
+    return paths[0] if paths else Path("ConsoleHost_history.txt")
 
 def copy_to_clipboard(text: str) -> bool:
     try:
-        proc = subprocess.Popen(["clip"], stdin=subprocess.PIPE, shell=True)
-        proc.communicate(input=text.encode("utf-16le"))
-        return True
+        # Windows native clip
+        if shutil.which("clip.exe") or shutil.which("clip"):
+            proc = subprocess.Popen(["clip"], stdin=subprocess.PIPE)
+            proc.communicate(input=text.encode("utf-16le"))
+            return True
+        # macOS pbcopy
+        elif shutil.which("pbcopy"):
+            proc = subprocess.Popen(["pbcopy"], stdin=subprocess.PIPE)
+            proc.communicate(input=text.encode("utf-8"))
+            return True
+        # Linux xclip / wl-copy
+        elif shutil.which("wl-copy"):
+            proc = subprocess.Popen(["wl-copy"], stdin=subprocess.PIPE)
+            proc.communicate(input=text.encode("utf-8"))
+            return True
+        elif shutil.which("xclip"):
+            proc = subprocess.Popen(["xclip", "-selection", "clipboard"], stdin=subprocess.PIPE)
+            proc.communicate(input=text.encode("utf-8"))
+            return True
+        return False
     except Exception:
         return False
 
@@ -90,6 +116,11 @@ def is_dud_command(cmd: str) -> bool:
     return False
 
 class SearchInput(Input):
+    def __init__(self, *args, **kwargs):
+        kwargs["select_on_focus"] = False
+        super().__init__(*args, **kwargs)
+        self.select_on_focus = False
+
     BINDINGS = [
         Binding("up", "app.nav_up", "Up", show=False),
         Binding("down", "app.nav_down", "Down", show=False),
@@ -295,6 +326,30 @@ class HelpModal(ModalScreen):
         text-align: center;
         color: $text-muted;
     }
+
+    Screen.theme-monokai #help_container {
+        border: thick #a6e22e;
+        background: #1e1f1c;
+    }
+    Screen.theme-monokai #help_title {
+        color: #fd971f;
+    }
+
+    Screen.theme-dracula #help_container {
+        border: thick #bd93f9;
+        background: #1e1f29;
+    }
+    Screen.theme-dracula #help_title {
+        color: #ff79c6;
+    }
+
+    Screen.theme-tokyonight #help_container {
+        border: thick #7aa2f7;
+        background: #16161e;
+    }
+    Screen.theme-tokyonight #help_title {
+        color: #bb9af7;
+    }
     """
 
     BINDINGS = [
@@ -304,16 +359,26 @@ class HelpModal(ModalScreen):
         Binding("f1", "app.pop_screen", "Close"),
         Binding("enter", "app.pop_screen", "Close"),
         Binding("q", "app.pop_screen", "Close"),
+        Binding("t", "toggle_theme_from_modal", "Theme (T)"),
+        Binding("r", "reload_from_modal", "Reload (R)"),
     ]
+
+    def action_toggle_theme_from_modal(self) -> None:
+        if hasattr(self.app, "action_toggle_theme"):
+            self.app.action_toggle_theme()
+
+    def action_reload_from_modal(self) -> None:
+        self.dismiss()
+        if hasattr(self.app, "action_reload_history"):
+            self.app.action_reload_history()
 
     def compose(self) -> ComposeResult:
         with Vertical(id="help_container"):
-            yield Static("⚡ PowerShell History Navigator - Shortcuts & Commands", id="help_title")
+            yield Static("PowerShell History Navigator - Shortcuts & Commands", id="help_title")
             help_content = (
-                "[bold cyan]Navigation & Command Mode[/]\n"
+                "[bold cyan]Navigation & Search[/]\n"
                 "  [yellow]↑ / ↓[/]            Navigate history rows (works from search bar)\n"
                 "  [yellow]← / →[/]            Jump 10 items backward / forward\n"
-                "  [yellow]:[/]                [bold green]Enter Command Mode[/] (focuses bar with ':')\n"
                 "  [yellow]/[/]                Focus live search bar\n"
                 "  [yellow]Esc[/]              Clear search / Return to table\n\n"
                 "[bold cyan]Actions & Colon Command Counterparts[/]\n"
@@ -321,7 +386,7 @@ class HelpModal(ModalScreen):
                 "  [yellow]M / I[/]            [bold green]In-Place Edit Command[/]           [dim](:edit / :mod)[/]\n"
                 "  [yellow]Delete / D[/]       Delete selected command         [dim](:del / :delete)[/]\n"
                 "  [bold red]X / Shift+Del[/]      [bold red]Delete ALL filtered commands[/]    [dim](:purge / :clean)[/]\n"
-                "  [yellow]S[/]                Toggle Sort (Newest ⇄ Oldest)   [dim](:sort / :invert)[/]\n"
+                "  [yellow]S[/]                Toggle Sort (Newest <-> Oldest) [dim](:sort / :invert)[/]\n"
                 "  [yellow]T[/]                Toggle Theme (Monokai/Dracula)  [dim](:theme / :tokyo)[/]\n"
                 "  [yellow]E / O[/]            Open in Sublime Text / Editor   [dim](:subl / :open)[/]\n"
                 "  [yellow]R[/]                Reload history from disk        [dim](:reload / :sync)[/]\n"
@@ -550,6 +615,10 @@ class HistoryDashboard(App):
 
     def apply_theme_classes(self) -> None:
         theme = self.THEMES[self.current_theme_idx]
+        for scr in getattr(self, "screen_stack", []):
+            for t in self.THEMES:
+                scr.remove_class(f"theme-{t}")
+            scr.add_class(f"theme-{theme}")
         for t in self.THEMES:
             self.screen.remove_class(f"theme-{t}")
         self.screen.add_class(f"theme-{theme}")
@@ -791,6 +860,8 @@ class HistoryDashboard(App):
     def action_focus_search(self) -> None:
         inp = self.query_one("#search_input", SearchInput)
         inp.focus()
+        inp.cursor_position = len(inp.value)
+        inp.selection = Selection.cursor(len(inp.value))
 
     def action_focus_colon_search(self) -> None:
         """Command Mode: Focuses input bar and adds ':' character."""
@@ -799,6 +870,7 @@ class HistoryDashboard(App):
         if not inp.value.startswith(":"):
             inp.value = ":" + inp.value
         inp.cursor_position = len(inp.value)
+        inp.selection = Selection.cursor(len(inp.value))
 
     def action_clear_or_blur(self) -> None:
         inp = self.query_one("#search_input", SearchInput)
@@ -1062,8 +1134,16 @@ class HistoryDashboard(App):
             self.status_msg = f"Error opening editor: {e}"
 
     def action_reload_history(self) -> None:
+        try:
+            table = self.query_one("#history_table", DataTable)
+            preview = self.query_one("#preview_container", Vertical)
+            table.styles.animate("opacity", value=0.35, duration=0.08, on_complete=lambda: table.styles.animate("opacity", value=1.0, duration=0.14))
+            preview.styles.animate("opacity", value=0.45, duration=0.08, on_complete=lambda: preview.styles.animate("opacity", value=1.0, duration=0.14))
+        except Exception:
+            pass
+
         self.load_history(preserve_filter=True)
-        self.notify("History reloaded from disk 🔄", timeout=2.0)
+        self.notify(f"Synced {len(self.all_commands)} commands from disk ⚡", timeout=2.0)
 
     def get_selected_command(self) -> Optional[str]:
         table = self.query_one("#history_table", DataTable)
