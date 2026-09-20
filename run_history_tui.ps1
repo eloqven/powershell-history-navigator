@@ -7,4 +7,4 @@ if (-not (pip show textual > $null 2>&1)) {
 }
 
 # Run the TUI application
-python D:/history_tui.py
+python "$PSScriptRoot/history_tui.py"

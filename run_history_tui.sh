@@ -1,2 +1,3 @@
 #!/usr/bin/env bash
-python D:/history_tui.py "$@"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+python "$SCRIPT_DIR/history_tui.py" "$@"
