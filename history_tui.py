@@ -705,7 +705,7 @@ class HistoryDashboard(App):
 
             if filter_duds_only and not is_dud:
                 continue
-            if q and not q.startswith(":") and q not in cmd.lower():
+            if q and q not in cmd.lower():
                 continue
             indices.append(i)
 

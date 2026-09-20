@@ -5,26 +5,53 @@ from history_tui import HelpModal, HistoryDashboard, SearchInput
 @pytest.fixture(autouse=True)
 def temp_history(tmp_path, monkeypatch):
     history_file = tmp_path / "test_history.txt"
-    history_file.write_text("git status\nGet-Process\nls -la\n", encoding="utf-8")
+    content = (
+        "git status\n"
+        "cd C:\\Projects\n"
+        "git commit -m \"fix:red-alert\"\n"
+        "+ CategoryInfo : NotSpecified: (:) [], RemoteException\n"
+        "git log --format:%s\n"
+        "Get-Process\n"
+    )
+    history_file.write_text(content, encoding="utf-8")
     monkeypatch.setattr(HistoryDashboard, "history_path", history_file)
     return history_file
 
 @pytest.mark.anyio
-async def test_colon_command_mode_selection_retention():
+async def test_colon_live_filtering_and_dud_command():
+    """Verify that typing ':' filters commands containing ':' normally,
+    and only when the full ':red' command is entered does it switch to dud-only filtering.
+    """
     app = HistoryDashboard()
     async with app.run_test() as pilot:
-        table = app.query_one("#history_table", DataTable)
         inp = app.query_one("#search_input", SearchInput)
+        table = app.query_one("#history_table", DataTable)
 
-        assert app.focused == table
-        assert inp.value == ""
+        # Initially all 6 commands loaded
+        assert len(app.filtered_indices) == 6
 
+        # Typing ':' matches 4 commands containing ':' (cd C:\..., fix:red-alert, CategoryInfo, git log --format:%s)
         await pilot.press("colon")
-        assert app.focused == inp
         assert inp.value == ":"
+        assert len(app.filtered_indices) == 4
 
-        await pilot.press("r", "e", "d")
+        # Typing 'r' gives ':r' -> matches 'fix:red-alert'
+        await pilot.press("r")
+        assert inp.value == ":r"
+        assert len(app.filtered_indices) == 1
+        assert app.filtered_indices[0] == 2  # 'git commit -m "fix:red-alert"'
+
+        # Typing 'e' gives ':re' -> matches 'fix:red-alert'
+        await pilot.press("e")
+        assert inp.value == ":re"
+        assert len(app.filtered_indices) == 1
+
+        # Typing 'd' gives ':red' -> completed special trigger! Switches to filtering ALL syntax duds
+        await pilot.press("d")
         assert inp.value == ":red"
+        assert len(app.filtered_indices) == 1
+        assert app.filtered_indices[0] == 3  # '+ CategoryInfo : ...' (the syntax dud)
+        assert app.dud_flags[app.filtered_indices[0]] is True
 
 @pytest.mark.anyio
 async def test_slash_search_focus_and_typing():
@@ -39,6 +66,7 @@ async def test_slash_search_focus_and_typing():
 
         await pilot.press("g", "i", "t")
         assert inp.value == "git"
+        assert len(app.filtered_indices) == 3  # 'git status', 'git commit...', 'git log...'
 
 @pytest.mark.anyio
 async def test_theme_toggle_command():
