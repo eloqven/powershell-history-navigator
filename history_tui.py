@@ -804,6 +804,9 @@ class HistoryDashboard(App):
             return self.all_commands[real_idx]
         return None
 
-if __name__ == "__main__":
+def main() -> None:
     app = HistoryDashboard()
     app.run()
+
+if __name__ == "__main__":
+    main()

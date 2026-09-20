@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "powershell-history-navigator"
+version = "1.0.0"
+description = "A high-performance terminal UI for inspecting, searching, syntax-validating, and pruning PowerShell history."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "eloqven" }
+]
+keywords = ["powershell", "history", "psreadline", "tui", "textual", "cli", "terminal"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Utilities",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "textual>=0.70.0",
+    "rich>=13.0.0",
+    "Pillow>=10.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/eloqven/powershell-history-navigator"
+Repository = "https://github.com/eloqven/powershell-history-navigator.git"
+Issues = "https://github.com/eloqven/powershell-history-navigator/issues"
+
+[project.scripts]
+pshist = "history_tui:main"
+ps-history = "history_tui:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+pythonpath = ["."]
