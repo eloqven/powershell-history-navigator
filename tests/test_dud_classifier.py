@@ -35,6 +35,31 @@ def test_dud_error_tracebacks():
     for cmd in dud_samples:
         assert is_dud_command(cmd), f"Error trace line should be detected as dud: {cmd}"
 
+def test_dud_prompt_continuations_and_dangling_escapes():
+    prompt_samples = [
+        ">> asdfasdfasdfasdf",
+        ">> sdasdfasdfasdf",
+        ">> Get-Process",
+        ">>> nested prompt copy paste",
+        "PS C:\\Users\\admin> Get-ChildItem",
+        "sdasdfadsfasdfasdf`",
+        "git commit -m `",
+    ]
+    for cmd in prompt_samples:
+        assert is_dud_command(cmd), f"Prompt continuation or dangling escape should be flagged as dud: {cmd}"
+
+def test_dud_keyboard_mash_spam():
+    mash_samples = [
+        "asdfasdfasdfasdf",
+        "sdasdfasdfasdf",
+        "sdasdfadsfasdfasdf",
+        "aaaaaa",
+        "qwerqwerqwer",
+        "zxcvzxcvzxcv",
+    ]
+    for cmd in mash_samples:
+        assert is_dud_command(cmd), f"Keyboard mash / spam should be flagged as dud: {cmd}"
+
 def test_dud_unbalanced_quotes():
     unbalanced_samples = [
         "git commit -m 'unclosed single quote",
@@ -65,6 +90,7 @@ def test_dud_leading_invalid_punctuation():
         "} else {",
         ")",
         "]",
+        "> output.txt",
     ]
     for cmd in invalid_leading:
         assert is_dud_command(cmd), f"Invalid leading punctuation should be flagged as dud: {cmd}"

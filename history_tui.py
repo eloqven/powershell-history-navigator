@@ -68,8 +68,10 @@ def is_dud_command(cmd: str) -> bool:
     if not c:
         return True
 
-    # 1. Error traceback copy-pastes & caret/tilde error indicators
-    if c.startswith(("+ ", "+~", "+^", "+ `", "At line:", "At C:", "+ CategoryInfo", "+ FullyQualifiedErrorId")):
+    # 1. Error traceback copy-pastes, prompt continuation & caret/tilde error indicators
+    if c.startswith(("+ ", "+~", "+^", "+ `", "At line:", "At C:", "+ CategoryInfo", "+ FullyQualifiedErrorId", ">>", ">>>", "PS >", "PS>", "PS C:", "PS D:")):
+        return True
+    if re.match(r"^PS\s+[a-zA-Z]:\\", c):
         return True
     if "FullyQualifiedErrorId" in c or "CategoryInfo" in c or "CommandNotFoundException" in c:
         return True
@@ -80,11 +82,23 @@ def is_dud_command(cmd: str) -> bool:
     if re.match(r"^[\+~^\.]{2,}", c):
         return True
 
-    # 2. Starting with invalid leading punctuation (broken pipes / dangling brackets)
-    if c.startswith(("}", ")", "]", ",", ";", "|")):
+    # 2. Starting with invalid leading punctuation or prompt continuation (broken pipes, redirections, dangling brackets)
+    if c.startswith(("}", ")", "]", ",", ";", "|", ">")):
         return True
 
-    # 3. State machine for unclosed quotes and unmatched brackets
+    # 3. Dangling trailing continuation/escape
+    if c.endswith("`"):
+        return True
+
+    # 4. Keyboard mash / home-row spam without spaces
+    if re.search(r"(.)\1{4,}", c):
+        return True
+    if len(c) >= 8 and " " not in c:
+        chars = set(c.lower())
+        if chars.issubset(set("asdf")) or chars.issubset(set("jkl;")) or chars.issubset(set("qwer")) or chars.issubset(set("zxcv")):
+            return True
+
+    # 5. State machine for unclosed quotes and unmatched brackets
     stack = []
     in_single = False
     in_double = False
@@ -110,7 +124,7 @@ def is_dud_command(cmd: str) -> bool:
                 if not stack or BRACKETS[stack.pop()] != ch:
                     return True
 
-    if in_single or in_double or stack:
+    if in_single or in_double or stack or escaped:
         return True
 
     return False
