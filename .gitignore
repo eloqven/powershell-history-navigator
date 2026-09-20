@@ -12,3 +12,7 @@ env/
 
 # Compound Engineering scratch space
 .context/compound-engineering/
+
+# Local notes & summaries
+SIMPLIFICATION_SUMMARY.md
+
