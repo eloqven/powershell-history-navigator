@@ -139,9 +139,74 @@ function hist { python "D:\powershell-history-navigator\history_tui.py" }
 
 ---
 
-## ⌨️ Keyboard Shortcuts & Command Mode
+## 📖 How to Use & Workflow Guide
 
-Press **`:`** anytime to enter **Command Mode** at the bottom bar (like Vim), or use single-key shortcuts:
+### 1. 🔍 Searching & Instant Navigation
+- **Live Search**: Press **`/`** to jump to the search bar. As you type, the table updates in real-time.
+- **Seamless Arrow Keys**: Press **`↑`** or **`↓`** at any moment — even while actively typing in the search box — to immediately highlight and navigate through matching commands.
+- **Clear Search**: Press **`Esc`** to clear your search query and return focus to the command table.
+
+---
+
+### 2. ⌨️ Vim-Style Command Mode (`:`)
+Press **`:`** (or `Shift + ;`) from anywhere in the app to enter **Command Mode**. The bottom bar automatically opens with `:` ready for you to execute 1-word commands:
+
+- **`:red`** or **`:duds`** — Isolate and filter only broken syntax / dud commands.
+- **`:edit`** or **`:mod`** — Open the in-place editor for the highlighted command.
+- **`:sort`** or **`:invert`** — Flip history sorting order between Newest-First and Oldest-First.
+- **`:theme`** — Cycle through color palettes (*or jump directly with `:monokai`*, *`:dracula`*, *`:tokyo`*).
+- **`:del`** — Delete the currently highlighted command from history.
+- **`:purge`** or **`:clean`** — Delete all currently filtered commands (with double confirmation).
+- **`:subl`** or **`:open`** — Open your history file in Sublime Text or your default text editor.
+- **`:reload`** or **`:sync`** — Re-read history from disk while preserving your current search filter.
+- **`:help`** or **`:keys`** — Open the on-screen shortcut cheat-sheet.
+- **`:q`** or **`:quit`** — Exit the application.
+
+---
+
+### 3. ✏️ In-Place Command Editing (`M` or `:edit`)
+Found a useful past command with a small typo, outdated branch name, or wrong path?
+1. Highlight the command in the list and press **`M`** (or **`I`**, or type `:edit`).
+2. An interactive editing window pops up pre-loaded with the full command.
+3. Edit the command text using arrow keys and backspace.
+4. Press **`Enter`** (or click **Save to Disk**) to update the command in `ConsoleHost_history.txt` on disk, or press **`Ctrl + C`** to copy the modified version directly to your clipboard and exit.
+
+---
+
+### 4. 🔴 Finding & Purging Syntax Errors & Duds (`:red` ➔ `X`)
+Accidentally pasted CLI error output, multiline stack traces, or unbalanced strings into your terminal?
+1. Type **`:red`** (or **`:duds`**) in the bottom bar. The table immediately filters to show **only** problematic commands flagged with red indicators (`[!]` and `[Syntax Error]`).
+2. To delete a single dud, press **`Delete`** or **`D`**.
+3. To delete **ALL matching duds at once**:
+   - Press **`X`** (or **`Shift + Delete`**, or type `:purge`).
+   - Pass through the two-step safety confirmation modals (`Enter` ➔ `Enter`).
+   - All bad commands are permanently wiped from your history file on disk!
+
+---
+
+### 5. 🔃 Custom Sorting & Classic Terminal Mode (`S` or `:sort`)
+Press **`S`** to toggle between two distinct navigation paradigms:
+- **Newest First (Default)**: Your most recent commands are at Row #1 (Top), allowing you to review recent work from top to bottom.
+- **Classic Terminal Mode (Oldest First)**: Mirrors standard terminal prompt history where oldest commands are at the top and the newest command is preselected at the very bottom (Row #N).
+
+---
+
+### 6. 🎨 Full-TUI Theme Immersion (`T` or `:theme`)
+Press **`T`** to cycle between three themes that transform the entire layout (screen background, table headers, cursor highlight colors, preview borders, and PowerShell syntax highlighting):
+- 🟢 **Monokai**: Classic vibrant `#272822` dark background with lime-green headers and magenta accents.
+- 🟣 **Dracula**: Deep purple `#282a36` with cyan/green cursor and electric pink borders.
+- 🔵 **Tokyo Night**: Ultra-sleek `#1a1b26` with electric indigo headers and neon blue highlights.
+
+---
+
+### 7. 📝 Sublime Text & External Editor Integration (`E` / `R`)
+- Press **`E`** (or **`O`**, or `:subl`) to open `ConsoleHost_history.txt` directly in Sublime Text or your configured `$env:EDITOR`.
+- Edit, clean, or reorganize your history manually in your editor and save.
+- Switch back to the TUI and press **`R`** (or `:reload`) to sync the changes immediately. Any active search query is preserved automatically.
+
+---
+
+## ⌨️ Keyboard Shortcuts & Command Mode
 
 | Key | Colon Command | Action | Description |
 |:---|:---|:---|:---|
@@ -168,7 +233,7 @@ Press **`:`** anytime to enter **Command Mode** at the bottom bar (like Vim), or
 ## 🛡️ Safety & Data Integrity
 
 - **Automatic Backups**: Modifying or cleaning history writes safely to `ConsoleHost_history.txt`.
-- **Bulk Deletion Safeguard**: The bulk delete command (`X`) is strictly blocked when all commands are visible, preventing accidental full wipes.
+- **Bulk Deletion Safeguard**: The bulk delete command (`X` / `:purge`) is strictly blocked when all commands are visible, preventing accidental full wipes.
 - **Double Confirmation**: Any batch deletion requires explicitly passing through two confirmation modals before touching disk storage.
 
 ---
