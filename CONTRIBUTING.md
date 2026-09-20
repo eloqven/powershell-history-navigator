@@ -4,7 +4,7 @@ Thank you for your interest in contributing to **PowerShell History Navigator**!
 
 ---
 
-## 🛠️ Development Setup
+## Development Setup
 
 1. **Fork and clone the repository:**
    ```bash
@@ -34,7 +34,7 @@ Thank you for your interest in contributing to **PowerShell History Navigator**!
 
 ---
 
-## 📝 Code Style & Guidelines
+## Code Style & Guidelines
 
 - Follow [PEP 8](https://peps.python.org/pep-0008/) style conventions.
 - Maintain type hints where applicable.
@@ -42,7 +42,7 @@ Thank you for your interest in contributing to **PowerShell History Navigator**!
 
 ---
 
-## 🚀 Submitting a Pull Request
+## Submitting a Pull Request
 
 1. Create a feature branch (`git checkout -b feat/my-new-feature`).
 2. Commit your changes with clear, descriptive commit messages.
