@@ -419,7 +419,7 @@ class HistoryDashboard(App):
             except Exception:
                 pass
 
-    def load_history(self) -> None:
+    def load_history(self, preserve_filter: bool = True) -> None:
         if self.history_path.exists():
             try:
                 with open(self.history_path, "r", encoding="utf-8", errors="replace") as f:
@@ -437,7 +437,15 @@ class HistoryDashboard(App):
             self.dud_flags = []
             self.status_msg = f"History file not found: {self.history_path}"
 
-        self.apply_filter("")
+        current_query = ""
+        if preserve_filter:
+            try:
+                search_input = self.query_one("#search_input", SearchInput)
+                current_query = search_input.value
+            except Exception:
+                current_query = ""
+
+        self.apply_filter(current_query)
 
     def apply_filter(self, query: str) -> None:
         q = query.strip().lower()
