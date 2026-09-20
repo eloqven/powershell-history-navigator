@@ -379,7 +379,6 @@ class HistoryDashboard(App):
     status_msg = reactive("Ready")
 
     def compose(self) -> ComposeResult:
-        yield Header(show_clock=True)
         with Vertical(id="main_container"):
             with Vertical(id="preview_container"):
                 yield Static("Command Preview", id="preview_title")
