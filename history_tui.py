@@ -62,6 +62,54 @@ def copy_to_clipboard(text: str) -> bool:
                 return False
     return False
 
+def launch_in_terminal(command: str) -> bool:
+    """Launches command in a new detached terminal console window."""
+    c = command.strip()
+    if not c:
+        return False
+
+    if os.name == "nt":
+        creation_flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
+        if shutil.which("wt"):
+            try:
+                subprocess.Popen(["wt.exe", "powershell.exe", "-NoExit", "-Command", c])
+                return True
+            except Exception:
+                pass
+        try:
+            subprocess.Popen(["powershell.exe", "-NoExit", "-Command", c], creationflags=creation_flags)
+            return True
+        except Exception:
+            pass
+        try:
+            subprocess.Popen(["cmd.exe", "/K", c], creationflags=creation_flags)
+            return True
+        except Exception:
+            return False
+    else:
+        candidates = [
+            ("x-terminal-emulator", ["x-terminal-emulator", "-e", f"bash -c {shlex.quote(c)}; exec bash"]),
+            ("gnome-terminal", ["gnome-terminal", "--", "bash", "-c", f"{c}; exec bash"]),
+            ("konsole", ["konsole", "-e", "bash", "-c", f"{c}; exec bash"]),
+            ("xfce4-terminal", ["xfce4-terminal", "-e", f"bash -c '{c}; exec bash'"]),
+            ("xterm", ["xterm", "-e", f"bash -c '{c}; exec bash'"]),
+        ]
+        for binary, args in candidates:
+            if shutil.which(binary):
+                try:
+                    subprocess.Popen(args)
+                    return True
+                except Exception:
+                    continue
+        if shutil.which("open"):
+            try:
+                escaped = c.replace('"', '\\"')
+                subprocess.Popen(["osascript", "-e", f'tell application "Terminal" to do script "{escaped}"'])
+                return True
+            except Exception:
+                pass
+    return False
+
 def is_dud_command(cmd: str) -> bool:
     """Detects if a history entry is a syntax dud, error traceback paste, or accidental input."""
     c = cmd.strip()
@@ -139,8 +187,8 @@ class SearchInput(Input):
         Binding("escape", "app.clear_or_blur", "Cancel", show=False),
     ]
 
-class EditCommandModal(ModalScreen[Optional[str]]):
-    """In-place command editing modal."""
+class EditCommandModal(ModalScreen[Optional[dict]]):
+    """In-place command editing and terminal execution modal."""
     CSS = """
     EditCommandModal {
         align: center middle;
@@ -148,7 +196,7 @@ class EditCommandModal(ModalScreen[Optional[str]]):
     }
 
     #edit_dialog {
-        width: 82;
+        width: 86;
         height: auto;
         max-height: 85%;
         border: thick $accent;
@@ -197,11 +245,12 @@ class EditCommandModal(ModalScreen[Optional[str]]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="edit_dialog"):
-            yield Static(f"✏️ In-Place Edit Command #{self.command_index}", id="edit_title")
+            yield Static(f"⚡ Command #{self.command_index} - Edit & Execute", id="edit_title")
             yield Input(value=self.original_command, id="edit_input")
             with Horizontal(id="edit_buttons"):
-                yield Button("Save to Disk (Enter)", id="btn_save", variant="success")
-                yield Button("Copy & Exit (Ctrl+C)", id="btn_copy", variant="primary")
+                yield Button("🚀 Run in Terminal (Enter)", id="btn_run", variant="success")
+                yield Button("💾 Save to Disk (Ctrl+S)", id="btn_save", variant="warning")
+                yield Button("📋 Copy & Exit (Ctrl+C)", id="btn_copy", variant="primary")
                 yield Button("Cancel (Esc)", id="btn_cancel", variant="default")
 
     def on_mount(self) -> None:
@@ -210,21 +259,22 @@ class EditCommandModal(ModalScreen[Optional[str]]):
         inp.cursor_position = len(inp.value)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
-        self.dismiss(event.value)
+        self.dismiss({"action": "run", "value": event.value})
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         inp = self.query_one("#edit_input", Input)
-        if event.button.id == "btn_save":
-            self.dismiss(inp.value)
+        if event.button.id == "btn_run":
+            self.dismiss({"action": "run", "value": inp.value})
+        elif event.button.id == "btn_save":
+            self.dismiss({"action": "save", "value": inp.value})
         elif event.button.id == "btn_copy":
-            copy_to_clipboard(inp.value)
-            self.app.exit(result=inp.value)
+            self.dismiss({"action": "copy", "value": inp.value})
         else:
             self.dismiss(None)
 
     def action_save_edit(self) -> None:
         inp = self.query_one("#edit_input", Input)
-        self.dismiss(inp.value)
+        self.dismiss({"action": "save", "value": inp.value})
 
     def action_cancel_edit(self) -> None:
         self.dismiss(None)
@@ -390,8 +440,8 @@ class HelpModal(ModalScreen):
                 "  [yellow]/[/]                Focus live search bar\n"
                 "  [yellow]Esc[/]              Clear search / Return to table\n\n"
                 "[bold cyan]Actions & Colon Command Counterparts[/]\n"
-                "  [yellow]Enter[/]            Copy & Exit                     [dim](:copy / :c)[/]\n"
-                "  [yellow]M / I[/]            [bold green]In-Place Edit Command[/]           [dim](:edit / :mod)[/]\n"
+                "  [yellow]Enter / M / I[/]       [bold green]Run in Terminal / Edit Modal[/]    [dim](:run / :edit)[/]\n"
+                "  [yellow]C[/]                  Copy to clipboard only          [dim](:copy / :c)[/]\n"
                 "  [yellow]Delete / D[/]       Delete selected command         [dim](:del / :delete)[/]\n"
                 "  [bold red]X / Shift+Del[/]      [bold red]Delete ALL filtered commands[/]    [dim](:purge / :clean)[/]\n"
                 "  [yellow]S[/]                Toggle Sort (Newest <-> Oldest) [dim](:sort / :invert)[/]\n"
@@ -584,7 +634,7 @@ class HistoryDashboard(App):
         Binding("s", "toggle_sort_order", "Sort Order (S)"),
         Binding("x", "delete_filtered", "Delete Filtered (X)"),
         Binding("shift+delete", "delete_filtered", "Delete Filtered", show=False),
-        Binding("enter", "copy_command", "Copy & Exit"),
+        Binding("enter", "edit_command", "Run / Action (Enter)"),
         Binding("c", "copy_command_only", "Copy (C)"),
         Binding("e", "open_in_editor", "Edit File (E)"),
         Binding("o", "open_in_editor", "Open (O)", show=False),
@@ -795,7 +845,7 @@ class HistoryDashboard(App):
                     self.action_toggle_theme()
             elif base_cmd in ("monokai", "dracula", "tokyonight", "tokyo"):
                 self.set_theme_by_name(base_cmd)
-            elif base_cmd in ("edit", "mod", "m"):
+            elif base_cmd in ("run", "exec", "edit", "mod", "m"):
                 self.action_edit_command()
             elif base_cmd in ("del", "delete", "d"):
                 self.action_delete_command()
@@ -820,6 +870,9 @@ class HistoryDashboard(App):
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         self.update_preview_for_row(event.cursor_row)
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        self.action_edit_command()
 
     def update_preview_for_row(self, row_idx: Optional[int]) -> None:
         if row_idx is not None and 0 <= row_idx < len(self.filtered_indices):
@@ -940,32 +993,46 @@ class HistoryDashboard(App):
         self.apply_filter(search_val)
 
     def action_edit_command(self) -> None:
-        """Opens interactive modal to edit selected command in-place."""
+        """Opens interactive modal to edit, run in new terminal, or copy selected command."""
         table = self.query_one("#history_table", DataTable)
         row = table.cursor_row
         if row is None or row < 0 or row >= len(self.filtered_indices):
-            self.notify("Select a command to edit.", timeout=2.0)
+            self.notify("Select a command first.", timeout=2.0)
             return
 
         real_idx = self.filtered_indices[row]
         current_cmd = self.all_commands[real_idx]
 
-        def on_edit_result(new_command: Optional[str]) -> None:
-            if new_command is None:
+        def on_edit_result(result: Optional[dict]) -> None:
+            if not result:
                 return
 
-            new_clean = new_command.strip()
-            if not new_clean:
-                self.notify("Edited command cannot be empty.", timeout=2.0)
+            action = result.get("action")
+            new_val = result.get("value", "").strip()
+            if not new_val:
+                self.notify("Command cannot be empty.", timeout=2.0)
                 return
 
-            self.all_commands[real_idx] = new_clean
-            self.dud_flags[real_idx] = is_dud_command(new_clean)
-            self.save_history_to_file()
-            self.notify(f"Updated command #{real_idx + 1} on disk! 💾", timeout=2.5)
+            # If command text changed, update history on disk
+            if new_val != current_cmd:
+                self.all_commands[real_idx] = new_val
+                self.dud_flags[real_idx] = is_dud_command(new_val)
+                self.save_history_to_file()
+                search_val = self.query_one("#search_input", SearchInput).value
+                self.apply_filter(search_val)
 
-            search_val = self.query_one("#search_input", SearchInput).value
-            self.apply_filter(search_val)
+            if action == "run":
+                copy_to_clipboard(new_val)
+                success = launch_in_terminal(new_val)
+                if success:
+                    self.notify(f"🚀 Launched in terminal window!", timeout=3.0)
+                else:
+                    self.notify("Copied to clipboard (terminal launch unavailable).", timeout=3.0)
+            elif action == "copy":
+                copy_to_clipboard(new_val)
+                self.exit(result=new_val)
+            elif action == "save":
+                self.notify(f"Updated command #{real_idx + 1} on disk! 💾", timeout=2.5)
 
         self.push_screen(EditCommandModal(real_idx + 1, current_cmd), on_edit_result)
 

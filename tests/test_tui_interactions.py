@@ -1,6 +1,6 @@
 import pytest
-from textual.widgets import DataTable
-from history_tui import HelpModal, HistoryDashboard, SearchInput
+from textual.widgets import Button, DataTable, Input
+from history_tui import EditCommandModal, HelpModal, HistoryDashboard, SearchInput
 
 @pytest.fixture(autouse=True)
 def temp_history(tmp_path, monkeypatch):
@@ -16,6 +16,66 @@ def temp_history(tmp_path, monkeypatch):
     history_file.write_text(content, encoding="utf-8")
     monkeypatch.setattr(HistoryDashboard, "history_path", history_file)
     return history_file
+
+@pytest.mark.anyio
+async def test_enter_key_opens_run_modal():
+    """Verify that pressing Enter on a command opens the Edit & Execute modal."""
+    app = HistoryDashboard()
+    async with app.run_test() as pilot:
+        table = app.query_one("#history_table", DataTable)
+        assert app.focused == table
+
+        # Press Enter on selected row to open modal
+        await pilot.press("enter")
+        assert isinstance(app.screen, EditCommandModal)
+
+        modal_inp = app.screen.query_one("#edit_input", Input)
+        assert len(modal_inp.value) > 0
+
+        # Press Escape to cancel modal
+        await pilot.press("escape")
+        assert not isinstance(app.screen, EditCommandModal)
+
+@pytest.mark.anyio
+async def test_modal_run_in_terminal(monkeypatch):
+    """Verify that pressing Enter inside modal triggers launch_in_terminal and copy_to_clipboard."""
+    launched = []
+    copied = []
+    monkeypatch.setattr("history_tui.launch_in_terminal", lambda cmd: launched.append(cmd) or True)
+    monkeypatch.setattr("history_tui.copy_to_clipboard", lambda cmd: copied.append(cmd) or True)
+
+    app = HistoryDashboard()
+    async with app.run_test() as pilot:
+        # Open modal with Enter on table row
+        await pilot.press("enter")
+        assert isinstance(app.screen, EditCommandModal)
+
+        # Press Enter inside input to trigger 'Run in Terminal'
+        await pilot.press("enter")
+        await pilot.pause()
+
+        assert not isinstance(app.screen, EditCommandModal)
+        assert len(launched) == 1
+        assert len(copied) == 1
+        assert launched[0] == copied[0]
+
+@pytest.mark.anyio
+async def test_modal_save_to_disk():
+    """Verify that clicking Save to Disk updates history on disk without launching terminal."""
+    app = HistoryDashboard()
+    async with app.run_test() as pilot:
+        await pilot.press("enter")
+        assert isinstance(app.screen, EditCommandModal)
+
+        modal_inp = app.screen.query_one("#edit_input", Input)
+        modal_inp.value = "git status --short"
+
+        btn_save = app.screen.query_one("#btn_save", Button)
+        btn_save.press()
+        await pilot.pause()
+
+        assert not isinstance(app.screen, EditCommandModal)
+        assert "git status --short" in app.all_commands
 
 @pytest.mark.anyio
 async def test_colon_live_filtering_and_dud_command():
