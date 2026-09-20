@@ -12,10 +12,20 @@ from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.containers import Vertical, Horizontal
 from textual.screen import ModalScreen
-from textual.widgets import Input, DataTable, Static, Button, TextArea
-from textual.widgets.input import Selection
+from textual.widgets import Input, DataTable, Static, Button
 from textual.binding import Binding
 from textual.reactive import reactive
+
+SUBL_CANDIDATES = (
+    r"C:\Program Files\Sublime Text 3\subl.exe",
+    r"C:\Program Files\Sublime Text\subl.exe",
+    r"C:\Program Files\Sublime Text 3\sublime_text.exe",
+    r"C:\Program Files\Sublime Text\sublime_text.exe",
+    r"C:\Program Files (x86)\Sublime Text 3\subl.exe",
+)
+
+BRACKETS = {"(": ")", "[": "]", "{": "}"}
+CLOSING_BRACKETS = {")", "]", "}"}
 
 def get_history_file_path() -> Path:
     app_data = os.environ.get("APPDATA", "")
@@ -37,29 +47,20 @@ def get_history_file_path() -> Path:
     return paths[0] if paths else Path("ConsoleHost_history.txt")
 
 def copy_to_clipboard(text: str) -> bool:
-    try:
-        # Windows native clip
-        if shutil.which("clip.exe") or shutil.which("clip"):
-            proc = subprocess.Popen(["clip"], stdin=subprocess.PIPE)
-            proc.communicate(input=text.encode("utf-16le"))
-            return True
-        # macOS pbcopy
-        elif shutil.which("pbcopy"):
-            proc = subprocess.Popen(["pbcopy"], stdin=subprocess.PIPE)
-            proc.communicate(input=text.encode("utf-8"))
-            return True
-        # Linux xclip / wl-copy
-        elif shutil.which("wl-copy"):
-            proc = subprocess.Popen(["wl-copy"], stdin=subprocess.PIPE)
-            proc.communicate(input=text.encode("utf-8"))
-            return True
-        elif shutil.which("xclip"):
-            proc = subprocess.Popen(["xclip", "-selection", "clipboard"], stdin=subprocess.PIPE)
-            proc.communicate(input=text.encode("utf-8"))
-            return True
-        return False
-    except Exception:
-        return False
+    candidates = [
+        ("clip", ["clip"], "utf-16le"),
+        ("pbcopy", ["pbcopy"], "utf-8"),
+        ("wl-copy", ["wl-copy"], "utf-8"),
+        ("xclip", ["xclip", "-selection", "clipboard"], "utf-8"),
+    ]
+    for binary, cmd, encoding in candidates:
+        if shutil.which(binary):
+            try:
+                subprocess.run(cmd, input=text.encode(encoding), check=True)
+                return True
+            except Exception:
+                return False
+    return False
 
 def is_dud_command(cmd: str) -> bool:
     """Detects if a history entry is a syntax dud, error traceback paste, or accidental input."""
@@ -84,7 +85,6 @@ def is_dud_command(cmd: str) -> bool:
         return True
 
     # 3. State machine for unclosed quotes and unmatched brackets
-    brackets = {"(": ")", "[": "]", "{": "}"}
     stack = []
     in_single = False
     in_double = False
@@ -104,10 +104,10 @@ def is_dud_command(cmd: str) -> bool:
         elif ch == '"' and not in_single:
             in_double = not in_double
         elif not in_single and not in_double:
-            if ch in brackets:
+            if ch in BRACKETS:
                 stack.append(ch)
-            elif ch in brackets.values():
-                if not stack or brackets[stack.pop()] != ch:
+            elif ch in CLOSING_BRACKETS:
+                if not stack or BRACKETS[stack.pop()] != ch:
                     return True
 
     if in_single or in_double or stack:
@@ -117,9 +117,7 @@ def is_dud_command(cmd: str) -> bool:
 
 class SearchInput(Input):
     def __init__(self, *args, **kwargs):
-        kwargs["select_on_focus"] = False
-        super().__init__(*args, **kwargs)
-        self.select_on_focus = False
+        super().__init__(*args, select_on_focus=False, **kwargs)
 
     BINDINGS = [
         Binding("up", "app.nav_up", "Up", show=False),
@@ -359,13 +357,9 @@ class HelpModal(ModalScreen):
         Binding("f1", "app.pop_screen", "Close"),
         Binding("enter", "app.pop_screen", "Close"),
         Binding("q", "app.pop_screen", "Close"),
-        Binding("t", "toggle_theme_from_modal", "Theme (T)"),
+        Binding("t", "app.toggle_theme", "Theme (T)"),
         Binding("r", "reload_from_modal", "Reload (R)"),
     ]
-
-    def action_toggle_theme_from_modal(self) -> None:
-        if hasattr(self.app, "action_toggle_theme"):
-            self.app.action_toggle_theme()
 
     def action_reload_from_modal(self) -> None:
         self.dismiss()
@@ -615,21 +609,15 @@ class HistoryDashboard(App):
 
     def apply_theme_classes(self) -> None:
         theme = self.THEMES[self.current_theme_idx]
-        for scr in getattr(self, "screen_stack", []):
-            for t in self.THEMES:
-                scr.remove_class(f"theme-{t}")
+        theme_classes = tuple(f"theme-{t}" for t in self.THEMES)
+        screens = [*getattr(self, "screen_stack", []), self.screen]
+        for scr in dict.fromkeys(screens):
+            scr.remove_class(*theme_classes)
             scr.add_class(f"theme-{theme}")
-        for t in self.THEMES:
-            self.screen.remove_class(f"theme-{t}")
-        self.screen.add_class(f"theme-{theme}")
 
     def action_toggle_theme(self) -> None:
-        self.current_theme_idx = (self.current_theme_idx + 1) % len(self.THEMES)
-        self.apply_theme_classes()
-        theme_name = self.THEMES[self.current_theme_idx].replace("tokyonight", "Tokyo Night").title()
-        self.notify(f"Theme Palette: {theme_name} 🎨", timeout=2.0)
-        table = self.query_one("#history_table", DataTable)
-        self.update_preview_for_row(table.cursor_row)
+        next_theme = self.THEMES[(self.current_theme_idx + 1) % len(self.THEMES)]
+        self.set_theme_by_name(next_theme)
 
     def set_theme_by_name(self, name: str) -> None:
         name_clean = name.lower().replace(" ", "").replace("-", "")
@@ -640,11 +628,11 @@ class HistoryDashboard(App):
         elif "tokyo" in name_clean or "night" in name_clean:
             self.current_theme_idx = 2
         else:
-            self.notify(f"Available themes: :monokai, :dracula, :tokyonight", timeout=2.5)
+            self.notify("Available themes: :monokai, :dracula, :tokyonight", timeout=2.5)
             return
         self.apply_theme_classes()
         theme_name = self.THEMES[self.current_theme_idx].replace("tokyonight", "Tokyo Night").title()
-        self.notify(f"Theme: {theme_name} 🎨", timeout=2.0)
+        self.notify(f"Theme Palette: {theme_name} 🎨", timeout=2.0)
         table = self.query_one("#history_table", DataTable)
         self.update_preview_for_row(table.cursor_row)
 
@@ -666,22 +654,21 @@ class HistoryDashboard(App):
                 pass
 
     def load_history(self, preserve_filter: bool = True) -> None:
-        if self.history_path.exists():
-            try:
-                with open(self.history_path, "r", encoding="utf-8", errors="replace") as f:
-                    lines = [line.rstrip("\r\n") for line in f.readlines()]
-                self.all_commands = lines
-                self.dud_flags = [is_dud_command(cmd) for cmd in self.all_commands]
-                dud_count = sum(1 for is_d in self.dud_flags if is_d)
-                self.status_msg = f"Loaded {len(self.all_commands)} commands ({dud_count} syntax duds)"
-            except Exception as e:
-                self.all_commands = []
-                self.dud_flags = []
-                self.status_msg = f"Error loading file: {e}"
-        else:
+        try:
+            with open(self.history_path, "r", encoding="utf-8", errors="replace") as f:
+                lines = [line.rstrip("\r\n") for line in f]
+            self.all_commands = lines
+            self.dud_flags = [is_dud_command(cmd) for cmd in self.all_commands]
+            dud_count = sum(1 for is_d in self.dud_flags if is_d)
+            self.status_msg = f"Loaded {len(self.all_commands)} commands ({dud_count} syntax duds)"
+        except FileNotFoundError:
             self.all_commands = []
             self.dud_flags = []
             self.status_msg = f"History file not found: {self.history_path}"
+        except Exception as e:
+            self.all_commands = []
+            self.dud_flags = []
+            self.status_msg = f"Error loading file: {e}"
 
         current_query = ""
         if preserve_filter:
@@ -747,23 +734,19 @@ class HistoryDashboard(App):
         current_row = table.cursor_row
         table.clear()
 
-        for display_idx, real_idx in enumerate(self.filtered_indices):
+        rows = []
+        for real_idx in self.filtered_indices:
             cmd = self.all_commands[real_idx]
             is_dud = self.dud_flags[real_idx] if real_idx < len(self.dud_flags) else False
             styled_cmd = self.format_command_cell(cmd, is_dud)
-
-            if is_dud:
-                idx_style = "bold red"
-                len_style = "red"
-            else:
-                idx_style = "bold yellow"
-                len_style = "magenta"
-
-            table.add_row(
+            idx_style = "bold red" if is_dud else "bold yellow"
+            len_style = "red" if is_dud else "magenta"
+            rows.append((
                 Text(str(real_idx + 1), style=idx_style),
                 Text(str(len(cmd)), style=len_style),
-                styled_cmd
-            )
+                styled_cmd,
+            ))
+        table.add_rows(rows)
 
         if len(self.filtered_indices) > 0:
             if not self.sort_newest_first and (current_row is None or current_row == 0):
@@ -861,16 +844,13 @@ class HistoryDashboard(App):
         inp = self.query_one("#search_input", SearchInput)
         inp.focus()
         inp.cursor_position = len(inp.value)
-        inp.selection = Selection.cursor(len(inp.value))
 
     def action_focus_colon_search(self) -> None:
         """Command Mode: Focuses input bar and adds ':' character."""
         inp = self.query_one("#search_input", SearchInput)
-        inp.focus()
         if not inp.value.startswith(":"):
             inp.value = ":" + inp.value
-        inp.cursor_position = len(inp.value)
-        inp.selection = Selection.cursor(len(inp.value))
+        self.action_focus_search()
 
     def action_clear_or_blur(self) -> None:
         inp = self.query_one("#search_input", SearchInput)
@@ -1086,12 +1066,7 @@ class HistoryDashboard(App):
                 flags = [arg for arg in parts[1:] if arg not in ("--wait", "-w")]
                 resolved = shutil.which(exe_name)
                 if not resolved:
-                    for candidate in [
-                        r"C:\Program Files\Sublime Text 3\subl.exe",
-                        r"C:\Program Files\Sublime Text\subl.exe",
-                        r"C:\Program Files\Sublime Text 3\sublime_text.exe",
-                        r"C:\Program Files\Sublime Text\sublime_text.exe",
-                    ]:
+                    for candidate in SUBL_CANDIDATES:
                         if os.path.exists(candidate):
                             resolved = candidate
                             break
@@ -1104,14 +1079,7 @@ class HistoryDashboard(App):
                     except Exception:
                         pass
 
-        subl_candidates = [
-            r"C:\Program Files\Sublime Text 3\subl.exe",
-            r"C:\Program Files\Sublime Text\subl.exe",
-            r"C:\Program Files\Sublime Text 3\sublime_text.exe",
-            r"C:\Program Files\Sublime Text\sublime_text.exe",
-            r"C:\Program Files (x86)\Sublime Text 3\subl.exe",
-        ]
-        for candidate in subl_candidates:
+        for candidate in SUBL_CANDIDATES:
             if os.path.exists(candidate):
                 try:
                     subprocess.Popen([candidate, target_file])
