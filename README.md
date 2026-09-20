@@ -127,6 +127,18 @@ function hist { python "D:\powershell-history-navigator\history_tui.py" }
 
 ---
 
+## 📸 Interface Preview (with Shortcut Keys Modal)
+
+<div align="center">
+
+<img src="./assets/screenshot.png" alt="PowerShell History Navigator - TUI Interface with Keyboard Shortcut Modal" width="900" style="border-radius: 12px; border: 1px solid #444; box-shadow: 0 8px 24px rgba(0,0,0,0.5); margin: 16px 0;"/>
+
+*Press `?`, `H`, or `F1` at any time inside the TUI to toggle the on-screen shortcut cheatsheet.*
+
+</div>
+
+---
+
 ## ⌨️ Keyboard Shortcuts
 
 | Key | Action | Description |
