@@ -478,7 +478,7 @@ class HistoryDashboard(App):
         display_cmd = cmd.replace("\t", " ").replace("\n", " ⏎ ")
         text = Text()
         if is_dud:
-            text.append("✖ ", style="bold bright_red")
+            text.append("[!] ", style="bold bright_red")
             text.append(display_cmd, style="bold red")
         else:
             parts = display_cmd.split(" ", 1)
@@ -542,12 +542,13 @@ class HistoryDashboard(App):
         title = self.query_one("#preview_title", Static)
         body = self.query_one("#preview_text", Static)
         if index is not None:
+            chars_tag = f"[bold cyan]({length} chars)[/]"
             if is_dud:
-                title.update(f"[bold red]✖ Dud / Syntax Error Command #{index} ({length} chars)[/]")
+                title.update(f"[dim #999999]Command #{index}[/] [bold red][Syntax Error][/] {chars_tag}")
                 formatted_dud = Text(text, style="bold red")
                 body.update(formatted_dud)
             else:
-                title.update(f"Command #{index} ({length} chars)")
+                title.update(f"[dim #999999]Command #{index}[/] {chars_tag}")
                 theme = self.THEMES[self.current_theme_idx]
                 syntax = Syntax(
                     text,
@@ -559,7 +560,7 @@ class HistoryDashboard(App):
                 )
                 body.update(syntax)
         else:
-            title.update("Command Preview")
+            title.update("[dim #999999]Command Preview[/]")
             body.update(text)
 
     def action_focus_search(self) -> None:
